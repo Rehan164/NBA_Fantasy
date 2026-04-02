@@ -226,26 +226,6 @@ def collect_all_seasons(start: int, end: int, fetch_advanced: bool = False) -> p
     return combined
 
 
-def add_betting_outcomes(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add betting outcome columns based on margin and total.
-
-    Note: Actual spread/total lines would need to come from a betting
-    data source. Here we just calculate the outcomes that would be
-    used for training once lines are added.
-    """
-    # These will be populated when betting lines are merged
-    df["spread_line"] = None  # Home team spread
-    df["total_line"] = None   # Over/under line
-    df["home_ml"] = None      # Home moneyline odds
-    df["away_ml"] = None      # Away moneyline odds
-
-    # Outcome placeholders (will be calculated when lines are added)
-    df["home_cover"] = None   # 1 if home covers spread
-    df["total_over"] = None   # 1 if total goes over
-
-    return df
-
 
 def update_current_season():
     """
@@ -274,7 +254,6 @@ def update_current_season():
         return
 
     new_games = process_game_logs_to_games(season_df)
-    new_games = add_betting_outcomes(new_games)
     print(f"  API returned {len(new_games)} games for current season")
 
     # Drop existing current-season rows, replace with fresh data
@@ -310,9 +289,6 @@ def main():
     if df.empty:
         print("No data collected!")
         return
-
-    # Add betting outcome columns
-    df = add_betting_outcomes(df)
 
     # Summary stats
     print(f"\n{'=' * 60}")
