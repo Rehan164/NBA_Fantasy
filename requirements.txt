@@ -1,3 +1,6 @@
 nba_api
 pandas
 tqdm
+scikit-learn
+matplotlib
+jupyter
