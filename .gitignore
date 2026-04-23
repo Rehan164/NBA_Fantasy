@@ -1,0 +1,19 @@
+# Data files (collected locally, too large for git)
+data/*.csv
+data/raw/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local env files
+.env
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
