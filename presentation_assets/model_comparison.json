@@ -1,0 +1,22 @@
+[
+  {
+    "model": "Linear Regression",
+    "test_rmse": 9.623197061335174,
+    "elapsed_s": 6.4467761516571045
+  },
+  {
+    "model": "Random Forest",
+    "test_rmse": 9.62811952389848,
+    "elapsed_s": 437.5811722278595
+  },
+  {
+    "model": "HistGB single-output",
+    "test_rmse": 9.56561473014597,
+    "elapsed_s": 21.660213232040405
+  },
+  {
+    "model": "HistGB multi-output (final)",
+    "test_rmse": 9.551425647955936,
+    "elapsed_s": 132.33886814117432
+  }
+]

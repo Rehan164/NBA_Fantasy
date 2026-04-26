@@ -60,7 +60,7 @@ def update_current_season():
     into the existing CSV.
     """
     print("=" * 60)
-    print("NBA Player Data — Incremental Update (current season only)")
+    print("NBA Player Data - Incremental Update (current season only)")
     print("=" * 60)
 
     if not PLAYER_GAME_LOGS_CSV.exists():

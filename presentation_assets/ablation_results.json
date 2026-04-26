@@ -1,0 +1,58 @@
+[
+  {
+    "step": "rolling only (baseline)",
+    "group_added": "rolling",
+    "n_features": 75,
+    "test_rmse": 9.872099564379296,
+    "delta_vs_prev": 0.0
+  },
+  {
+    "step": "+ context",
+    "group_added": "context",
+    "n_features": 78,
+    "test_rmse": 9.869326464673861,
+    "delta_vs_prev": -0.0027730997054344897
+  },
+  {
+    "step": "+ trends",
+    "group_added": "trends",
+    "n_features": 86,
+    "test_rmse": 9.867577414592061,
+    "delta_vs_prev": -0.001749050081800263
+  },
+  {
+    "step": "+ efficiency",
+    "group_added": "efficiency",
+    "n_features": 95,
+    "test_rmse": 9.845595111551626,
+    "delta_vs_prev": -0.021982303040434914
+  },
+  {
+    "step": "+ missing",
+    "group_added": "missing",
+    "n_features": 98,
+    "test_rmse": 9.588724211948117,
+    "delta_vs_prev": -0.2568708996035092
+  },
+  {
+    "step": "+ schedule",
+    "group_added": "schedule",
+    "n_features": 101,
+    "test_rmse": 9.586540302682069,
+    "delta_vs_prev": -0.0021839092660478343
+  },
+  {
+    "step": "+ position",
+    "group_added": "position",
+    "n_features": 106,
+    "test_rmse": 9.573854395977664,
+    "delta_vs_prev": -0.01268590670440517
+  },
+  {
+    "step": "+ dvp",
+    "group_added": "dvp",
+    "n_features": 107,
+    "test_rmse": 9.56561473014597,
+    "delta_vs_prev": -0.008239665831693443
+  }
+]

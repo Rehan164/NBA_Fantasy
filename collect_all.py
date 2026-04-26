@@ -16,6 +16,7 @@ STEPS = [
     ("collect_data.py",         "Team game logs          (~1 min)"),
     ("collect_players.py",      "Player game logs        (~2 min)"),
     ("collect_player_info.py",  "Player position + info  (~35 min)"),
+    ("build_features.py",       "Feature engineering     (~3 min)"),
 ]
 
 def run_step(script: str, description: str):
@@ -28,7 +29,7 @@ def run_step(script: str, description: str):
     elapsed = time.time() - start
     if result.returncode != 0:
         print(f"\n  {script} exited with code {result.returncode} after {elapsed/60:.1f} min")
-        print(f"  You can resume later — all scripts are checkpoint-safe.")
+        print(f"  You can resume later - all scripts are checkpoint-safe.")
         return False
     print(f"\n  {script} completed in {elapsed/60:.1f} min")
     return True

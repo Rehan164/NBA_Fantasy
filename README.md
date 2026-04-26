@@ -2,9 +2,7 @@
 
 Predicts DraftKings fantasy points per player per game using rolling game history and derived features.
 
-**Final model:** `HistGradientBoostingRegressor` with multi-output decomposition on 107 features. Test RMSE **9.533** (2.83% improvement over linear baseline) on the 2023-24 season.
-
-For the full story of how we got here — what we tried, what worked, what didn't — see [`JOURNEY.md`](JOURNEY.md). For charts and visual explanations see [`feature_engineering_review.ipynb`](feature_engineering_review.ipynb).
+**Final model:** `HistGradientBoostingRegressor` with multi-output decomposition on 107 features. Test RMSE ~9.55 on the 2023-24 season (compared to ~9.62 for a linear regression baseline).
 
 ## Setup
 
@@ -14,59 +12,46 @@ Requires Python 3.10+.
 pip install -r requirements.txt
 ```
 
-## Collecting data
+## Pipeline
 
-The notebook reads CSV files from `data/`. These are not in the repo (too large) — you must collect them. All scripts are resume-safe (Ctrl-C and re-run is fine).
+The project is organized in five phases:
 
-```bash
-# Orchestrator - runs all collection scripts in order (~40 min total)
-python collect_all.py
+1. **Collection** -- `collect_data.py`, `collect_players.py`, `collect_player_info.py` pull from `nba_api` into `data/*.csv`.
+2. **Processing** -- `process_data.py` (imported as a module) loads the raw CSVs, parses dates, normalizes types, and computes the DK fantasy points target.
+3. **Feature engineering** -- `build_features.py` produces `data/nba_features.csv` (rolling player/team/opponent stats, missing teammates, schedule density, position, DvP) plus a `data/nba_features_manifest.json` manifest of feature groups.
+4. **Modeling** -- `nba_fantasy_model.ipynb` trains the final HistGradientBoosting multi-output model on the feature CSV.
+5. **Tuning** -- `optuna_nba_fantasy_study.py` runs the Optuna hyperparameter study; `optuna_nba_fantasy_study_v2.py` is an alternate methodology using TimeSeriesSplit cross-validation.
 
-# Or run individually:
-python collect_data.py          # ~1 min  - team game logs
-python collect_players.py       # ~2 min  - player game logs
-python collect_player_info.py   # ~35 min - player position, height, draft year
-```
-
-For incremental refresh (only the current season), pass `--update` to `collect_data.py` / `collect_players.py`.
-
-## Running the model
+## Running it end-to-end
 
 ```bash
+python collect_all.py            # phases 1-3 (~40 min if data is empty)
 jupyter notebook nba_fantasy_model.ipynb
+python optuna_nba_fantasy_study.py
 ```
 
-The notebook loads whatever data files are present and gracefully skips feature groups whose source data isn't available yet, so you can run it mid-collection.
+For incremental refresh of just the current season, pass `--update` to `collect_data.py` and `collect_players.py` individually.
 
 ## Project structure
 
 ```
 NBA_Fantasy/
-├── nba_fantasy_model.ipynb           # Current model
-├── feature_engineering_review.ipynb  # Charts + narrative for presentation
-├── JOURNEY.md                        # Full chronological journey
-├── README.md                         # This file
-├── snapshots/                        # Timeline trace (v1-v5)
-├── collect_all.py                    # Data collection orchestrator
-├── collect_data.py                   # Team game logs
-├── collect_players.py                # Player game logs
-├── collect_player_info.py            # Player info (position, height, draft)
-├── config.py                         # Paths + rate-limit settings
+├── nba_fantasy_model.ipynb          # final model (load -> train -> evaluate)
+├── collect_data.py                  # team game logs
+├── collect_players.py               # player game logs
+├── collect_player_info.py           # player position, height, draft
+├── process_data.py                  # processing module
+├── build_features.py                # feature engineering script
+├── collect_all.py                   # orchestrator (phases 1-3)
+├── optuna_nba_fantasy_study.py      # Optuna study (single fold, 100 trials)
+├── optuna_nba_fantasy_study_v2.py   # Optuna study (TimeSeriesSplit, 120 trials)
+├── config.py                        # paths + season range + API delay
 ├── requirements.txt
-├── project_description.pdf           # Assignment spec
-└── data/                             # (gitignored) Output of collection scripts
+├── project_description.pdf
+└── data/                            # gitignored
+    ├── nba_historical_games.csv
+    ├── nba_player_game_logs.csv
+    ├── nba_player_info.csv
+    ├── nba_features.csv             # produced by build_features.py
+    └── nba_features_manifest.json   # produced by build_features.py
 ```
-
-## Snapshots
-
-Each major modeling milestone is preserved in `snapshots/` as a runnable notebook:
-
-| Snapshot | Test RMSE | What it shows |
-|---|---|---|
-| `v1_linear_baseline` | 9.811 | OLS on 240 raw lag features |
-| `v2_feature_iterations` | 9.846 | Tested 5 feature sets on LinReg — no significant improvement |
-| `v3_per36_rates` | 10.147 | Per-36 normalization on LinReg — worse, diagnosed why |
-| `v4_random_forest` | 9.942 | RandomForest on rolling features — model class wasn't the bottleneck |
-| `v5_external_features` | 9.527 | External data + missing teammates + HistGB + multi-output + ablation |
-
-Current notebook is simplified from v5 (Vegas removed — only -0.009 RMSE marginal value didn't justify added complexity).

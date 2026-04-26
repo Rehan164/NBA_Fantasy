@@ -4,8 +4,7 @@ Configuration constants for NBA Fantasy data collection.
 
 from pathlib import Path
 
-# ── Paths ────────────────────────────────────────────────────────────────────
-
+# Paths
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
@@ -18,8 +17,7 @@ PLAYER_GAME_LOGS_CSV = DATA_DIR / "nba_player_game_logs.csv"
 DATA_DIR.mkdir(exist_ok=True)
 RAW_DATA_DIR.mkdir(exist_ok=True)
 
-# ── Data Collection ──────────────────────────────────────────────────────────
-
+# Data Collection
 START_SEASON = 2000  # First season to collect (2000 = 1999-2000 season)
 END_SEASON = 2026    # Last season to collect (2026 = 2025-2026 season)
 

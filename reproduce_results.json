@@ -1,0 +1,12 @@
+{
+  "n_rows": 563774,
+  "n_features": 107,
+  "n_train": 497892,
+  "n_test": 65882,
+  "linreg_test_rmse": 9.623197061335174,
+  "linreg_train_rmse": 9.254955178272324,
+  "histgb_test_rmse": 9.551425647955936,
+  "histgb_train_rmse": 9.063629459144401,
+  "improvement_vs_linreg": 0.07177141337923842,
+  "pct_improvement": 0.7458167272455342
+}
