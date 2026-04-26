@@ -124,6 +124,44 @@ A high deficit means that across the team's typical rotation, a meaningful fract
 
 ---
 
+## Temporal validity — what's actually pre-game
+
+The missing-teammates derivation has one detail worth being explicit about: the per-player values are strictly pre-game, but the *set* of players being summed comes from the box score.
+
+```
+team_l10_min_played = sum of MIN_L10[p] for p in {players who played in this game}
+```
+
+Each `MIN_L10[p]` is `shift(1).rolling(10).mean()` — strictly prior games, no leakage. But the set being summed over (`{players who played}`) is determined when the game ends, not before tipoff.
+
+What this does and doesn't use:
+
+| | |
+|---|---|
+| Player's own current-game minutes | Not used ✓ |
+| Any player's current-game stats (PTS, REB, etc.) | Not used ✓ |
+| The actual game outcome | Not used ✓ |
+| *Which* players appear in the box score | Implicitly used ⚠️ |
+
+In production, the **active list** (published ~30 minutes before tipoff) would replace "players who appeared." The two sets overlap >95% for regular-season games — the gap is DNP-CDs, late scratches, and end-of-blowout rest, all rare. The bias direction matches between training and deployment, so the model learns from a slightly biased signal and receives a slightly biased input at inference time; the prediction transfers cleanly.
+
+We accept this small set-membership approximation because the feature contributes -0.249 RMSE — by far the largest single improvement in the project — and the train/deploy gap is small enough not to invalidate the signal.
+
+**Every other feature uses only data from games strictly prior to the prediction date:**
+
+| Feature group | Construction | Pre-game? |
+|---|---|---|
+| Player rolling, lags, trends, efficiency | `shift(1).rolling(...)` | ✓ |
+| Team rolling, opp rolling | `shift(lag).rolling(...)` | ✓ |
+| Context (`is_home`, `days_rest`, `opp_days_rest`) | Schedule info known when the game is scheduled | ✓ |
+| Schedule density (`is_b2b`, `games_last_4d/7d`) | Counts of *prior* games only | ✓ |
+| Position, height, years_experience | Static player attributes | ✓ |
+| Defense vs Position (`dvp_L20`) | Opponent's L20 FP allowed with `shift(1)` | ✓ |
+
+The missing-teammates feature is the only one with even a subtle temporal question. Everything else is by-construction safe.
+
+---
+
 ## Phase 5 — Simplification (current)
 
 After v5, we audited what was earning its keep. The ablation made the cuts obvious:
