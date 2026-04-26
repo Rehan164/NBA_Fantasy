@@ -479,24 +479,20 @@ def make_objective(X_full, y_full, stat_targets_full, fold_indices,
 
     def objective(trial):
         # ── Model hyperparameters ──
-        learning_rate    = trial.suggest_float("learning_rate", 0.005, 0.3, log=True)
-        max_iter         = trial.suggest_int("max_iter", 100, 2000)
-        max_depth        = trial.suggest_int("max_depth", 3, 15)
-        min_samples_leaf = trial.suggest_int("min_samples_leaf", 5, 100)
-        l2_reg           = trial.suggest_float("l2_regularization", 1e-8, 10.0, log=True)
-        max_bins         = trial.suggest_int("max_bins", 32, 255)
+        learning_rate    = trial.suggest_float("learning_rate", 0.01, 0.15, log=True)
+        max_iter         = trial.suggest_int("max_iter", 300, 1500)
+        max_depth        = trial.suggest_int("max_depth", 4, 10)
+        min_samples_leaf = trial.suggest_int("min_samples_leaf", 20, 100)
+        l2_reg           = trial.suggest_float("l2_regularization", 1e-4, 10.0, log=True)
+        max_bins         = trial.suggest_int("max_bins", 128, 255)
         loss             = trial.suggest_categorical("loss", ["squared_error", "absolute_error"])
 
         use_leaf_nodes = trial.suggest_categorical("use_max_leaf_nodes", [True, False])
-        max_leaf_nodes = trial.suggest_int("max_leaf_nodes", 15, 500) if use_leaf_nodes else None
+        max_leaf_nodes = trial.suggest_int("max_leaf_nodes", 31, 127) if use_leaf_nodes else None
 
-        early_stopping = trial.suggest_categorical("early_stopping", [True, False])
-        if early_stopping:
-            n_iter_no_change    = trial.suggest_int("n_iter_no_change", 5, 30)
-            validation_fraction = trial.suggest_float("validation_fraction", 0.05, 0.2)
-        else:
-            n_iter_no_change = None
-            validation_fraction = None
+        early_stopping      = True
+        n_iter_no_change    = trial.suggest_int("n_iter_no_change", 10, 30)
+        validation_fraction = trial.suggest_float("validation_fraction", 0.10, 0.20)
 
         # ── Strategy ──
         use_multi_output = trial.suggest_categorical("use_multi_output", [True, False])
@@ -880,11 +876,10 @@ def main():
         l2_regularization=bp["l2_regularization"],
         max_bins=bp["max_bins"],
         max_leaf_nodes=bp.get("max_leaf_nodes") if bp.get("use_max_leaf_nodes") else None,
-        early_stopping=bp["early_stopping"], random_state=42,
+        early_stopping=True, random_state=42,
+        n_iter_no_change=bp["n_iter_no_change"],
+        validation_fraction=bp["validation_fraction"],
     )
-    if bp["early_stopping"]:
-        best_model_params["n_iter_no_change"] = bp["n_iter_no_change"]
-        best_model_params["validation_fraction"] = bp["validation_fraction"]
 
     X_train = df_train[best_features].values
     X_test  = df_test[best_features].values
