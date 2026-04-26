@@ -1,0 +1,31 @@
+{
+  "mean_fp": {
+    "label": "Predict league-mean FP for every player-game",
+    "value_used": 23.337759494026816,
+    "test_rmse": 13.996146363902712
+  },
+  "player_career_mean": {
+    "label": "Predict the player's career mean FP (from train)",
+    "test_rmse": 11.969806229888668
+  },
+  "player_L10_rolling": {
+    "label": "Predict the player's last-10-game average FP",
+    "test_rmse": 10.299868745264037
+  },
+  "player_L5_rolling": {
+    "label": "Predict player's last-5-game avg FP",
+    "test_rmse": 10.573923465642832
+  },
+  "player_L3_rolling": {
+    "label": "Predict player's last-3-game avg FP",
+    "test_rmse": 11.007467322180792
+  },
+  "linreg_full_features": {
+    "label": "Linear regression on 107 engineered features",
+    "test_rmse": 9.623197061335174
+  },
+  "histgb_multi_output": {
+    "label": "HistGradientBoosting multi-output (final)",
+    "test_rmse": 9.551425647955936
+  }
+}
