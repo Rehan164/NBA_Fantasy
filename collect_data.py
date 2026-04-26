@@ -234,7 +234,7 @@ def update_current_season():
     you just want today's latest games.
     """
     print("=" * 60)
-    print("NBA Data — Incremental Update (current season only)")
+    print("NBA Data - Incremental Update (current season only)")
     print("=" * 60)
 
     # Load existing data
