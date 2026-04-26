@@ -1,0 +1,45 @@
+{
+  "run_id": "20260426_110340",
+  "best_value": 9.192850682217207,
+  "best_params": {
+    "learning_rate": 0.012052165413910803,
+    "max_iter": 1375,
+    "max_depth": 6,
+    "min_samples_leaf": 95,
+    "l2_regularization": 3.882385758402889,
+    "max_bins": 192,
+    "loss": "squared_error",
+    "use_max_leaf_nodes": true,
+    "max_leaf_nodes": 46,
+    "n_iter_no_change": 23,
+    "validation_fraction": 0.1657415754872047,
+    "use_multi_output": true,
+    "use_context": true,
+    "use_trends": true,
+    "use_efficiency": true,
+    "use_injury": true,
+    "use_schedule": true,
+    "use_position": true,
+    "use_dvp": true
+  },
+  "n_trials": 120,
+  "n_completed": 71,
+  "n_pruned": 49,
+  "n_splits": 3,
+  "fold_rmses": [
+    9.248414411074059,
+    9.009492578761225,
+    9.320645056816337
+  ],
+  "metrics": {
+    "train_rmse": 9.008810710020299,
+    "test_rmse": 9.52482437009539,
+    "linear_baseline_rmse": 9.616741175234113,
+    "best_val_rmse_mean": 9.192850682217207,
+    "best_val_rmse_std": 0.13296481269698762,
+    "delta_vs_linear": -0.09191680513872313,
+    "delta_vs_manual": -0.008175629904609849,
+    "delta_vs_v1_optuna": -0.17517562990460966,
+    "pct_improvement_vs_linear": 0.9557999270629792
+  }
+}
