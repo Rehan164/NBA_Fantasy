@@ -52,7 +52,10 @@ PLAYER_STATS = ["PTS", "REB", "AST", "STL", "BLK", "TOV", "FG3M", "MIN"]
 TEAM_STATS = ["score", "fg_made", "fg3_made", "reb", "ast", "stl", "blk", "tov"]
 EFF_STATS = ["FGA", "FTA", "FG_PCT", "FG3_PCT", "PLUS_MINUS"]
 WINDOWS = [3, 5, 10]
-N_TRIALS = 200
+N_TRIALS = 100
+
+FORCED_GROUPS   = ["trends", "efficiency", "injury", "missing_min"]
+OPTIONAL_GROUPS = ["context", "schedule", "position", "dvp"]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -258,6 +261,37 @@ def build_features(player_logs, games):
     ]
     print(f"  Injury impact: {len(injury_cols)}")
 
+    # ── Missing teammates (inline from MIN_L10 deficit) ──
+    # Restored from the notebook baseline — biggest single feature group there
+    # (Δ -0.249 RMSE in the ablation).
+    player_logs["MIN_L10"] = (
+        player_logs.groupby("PLAYER_ID")["MIN"]
+        .transform(lambda x: x.shift(1).rolling(10, min_periods=3).mean())
+    )
+    team_game_min = (
+        player_logs.dropna(subset=["MIN_L10"])
+        .groupby(["game_id_int", "TEAM_ABBREVIATION"])["MIN_L10"]
+        .agg(["sum", "count"])
+        .reset_index()
+        .rename(columns={"sum": "team_l10_min_played", "count": "team_players_played"})
+    )
+    team_game_min = team_game_min.merge(
+        games[["game_id_int", "date"]], on="game_id_int", how="left"
+    ).sort_values(["TEAM_ABBREVIATION", "date"]).reset_index(drop=True)
+    team_game_min["team_l10_min_baseline"] = (
+        team_game_min.groupby("TEAM_ABBREVIATION")["team_l10_min_played"]
+        .transform(lambda x: x.shift(1).rolling(10, min_periods=3).mean())
+    )
+    team_game_min["missing_min_deficit"] = (
+        team_game_min["team_l10_min_baseline"] - team_game_min["team_l10_min_played"]
+    )
+    missing_min_cols = ["team_l10_min_played", "team_players_played", "missing_min_deficit"]
+    df = df.merge(
+        team_game_min[["game_id_int", "TEAM_ABBREVIATION"] + missing_min_cols],
+        on=["game_id_int", "TEAM_ABBREVIATION"], how="left",
+    )
+    print(f"  Missing-min (inline): {len(missing_min_cols)}")
+
     # ── Schedule density ──
     team_sched_sorted = team_sched.sort_values(["TEAM_ABBREVIATION", "GAME_DATE"]).reset_index(drop=True)
     team_sched_sorted["is_b2b"] = (team_sched_sorted["days_rest"] == 1).astype(int)
@@ -351,14 +385,15 @@ def build_features(player_logs, games):
 
     # ── Assemble ──
     feature_groups = {
-        "rolling":    roll_cols,
-        "context":    context_cols,
-        "trends":     trend_cols,
-        "efficiency": curated_eff_cols,
-        "injury":     injury_cols,
-        "schedule":   schedule_cols,
-        "position":   position_cols,
-        "dvp":        dvp_cols,
+        "rolling":     roll_cols,
+        "context":     context_cols,
+        "trends":      trend_cols,
+        "efficiency":  curated_eff_cols,
+        "injury":      injury_cols,
+        "missing_min": missing_min_cols,
+        "schedule":    schedule_cols,
+        "position":    position_cols,
+        "dvp":         dvp_cols,
     }
 
     all_features = []
@@ -384,63 +419,62 @@ def make_objective(df_clean, feature_groups, roll_cols, is_inner_train, is_valid
     """Build the Optuna objective closure."""
 
     def objective(trial):
-        # ── Model hyperparameters ──
-        learning_rate    = trial.suggest_float("learning_rate", 0.005, 0.3, log=True)
-        max_iter         = trial.suggest_int("max_iter", 100, 2000)
-        max_depth        = trial.suggest_int("max_depth", 3, 15)
-        min_samples_leaf = trial.suggest_int("min_samples_leaf", 5, 100)
-        l2_reg           = trial.suggest_float("l2_regularization", 1e-8, 10.0, log=True)
-        max_bins         = trial.suggest_int("max_bins", 32, 255)
-        loss             = trial.suggest_categorical("loss", ["squared_error", "absolute_error"])
+        # ── Model hyperparameters (tightened to prevent overfit) ──
+        learning_rate    = trial.suggest_float("learning_rate", 0.01, 0.15, log=True)
+        max_iter         = trial.suggest_int("max_iter", 300, 1500)
+        max_depth        = trial.suggest_int("max_depth", 4, 10)
+        min_samples_leaf = trial.suggest_int("min_samples_leaf", 20, 100)
+        l2_reg           = trial.suggest_float("l2_regularization", 1e-4, 10.0, log=True)
+        max_bins         = trial.suggest_int("max_bins", 128, 255)
 
         use_leaf_nodes = trial.suggest_categorical("use_max_leaf_nodes", [True, False])
-        max_leaf_nodes = trial.suggest_int("max_leaf_nodes", 15, 500) if use_leaf_nodes else None
+        max_leaf_nodes = trial.suggest_int("max_leaf_nodes", 31, 127) if use_leaf_nodes else None
 
-        early_stopping = trial.suggest_categorical("early_stopping", [True, False])
-        if early_stopping:
-            n_iter_no_change    = trial.suggest_int("n_iter_no_change", 5, 30)
-            validation_fraction = trial.suggest_float("validation_fraction", 0.05, 0.2)
-        else:
-            n_iter_no_change = None
-            validation_fraction = None
-
-        # ── Strategy ──
-        use_multi_output = trial.suggest_categorical("use_multi_output", [True, False])
+        # Always early-stopping with reasonable settings — caps max_iter automatically
+        n_iter_no_change    = trial.suggest_int("n_iter_no_change", 10, 30)
+        validation_fraction = trial.suggest_float("validation_fraction", 0.10, 0.20)
 
         # ── Feature selection ──
+        # Force-include groups proven to help in the notebook ablation.
+        # missing_min was Δ -0.249 RMSE; keeping it always-on is the single
+        # biggest reason this run will beat the prior overfit Optuna.
         features = list(roll_cols)
-        for group_name in ["context", "trends", "efficiency", "injury", "schedule", "position", "dvp"]:
-            use_it = trial.suggest_categorical(f"use_{group_name}", [True, False])
-            if use_it and feature_groups[group_name]:
-                features += feature_groups[group_name]
+        for grp in FORCED_GROUPS:
+            if feature_groups.get(grp):
+                features += feature_groups[grp]
+        for grp in OPTIONAL_GROUPS:
+            use_it = trial.suggest_categorical(f"use_{grp}", [True, False])
+            if use_it and feature_groups.get(grp):
+                features += feature_groups[grp]
         features = list(dict.fromkeys(features))
 
         X_it = df_clean.loc[is_inner_train, features].values
-        X_v = df_clean.loc[is_valid, features].values
+        X_v  = df_clean.loc[is_valid, features].values
 
         params = dict(
-            loss=loss, learning_rate=learning_rate, max_iter=max_iter,
-            max_depth=max_depth, min_samples_leaf=min_samples_leaf,
-            l2_regularization=l2_reg, max_bins=max_bins,
-            max_leaf_nodes=max_leaf_nodes, early_stopping=early_stopping,
+            loss="squared_error",
+            learning_rate=learning_rate,
+            max_iter=max_iter,
+            max_depth=max_depth,
+            min_samples_leaf=min_samples_leaf,
+            l2_regularization=l2_reg,
+            max_bins=max_bins,
+            max_leaf_nodes=max_leaf_nodes,
+            early_stopping=True,
+            n_iter_no_change=n_iter_no_change,
+            validation_fraction=validation_fraction,
             random_state=42,
         )
-        if early_stopping:
-            params["n_iter_no_change"] = n_iter_no_change
-            params["validation_fraction"] = validation_fraction
 
         try:
-            if use_multi_output:
-                pred_v = np.zeros(len(X_v))
-                for stat, weight in DK_WEIGHTS.items():
-                    m = HistGradientBoostingRegressor(**params)
-                    m.fit(X_it, stat_targets[stat]["inner_train"])
-                    pred_v += weight * m.predict(X_v)
-                rmse = np.sqrt(mean_squared_error(y_v, pred_v))
-            else:
+            # Force multi-output decomposition — strictly better than direct
+            # in the notebook baseline (9.533 vs 9.542).
+            pred_v = np.zeros(len(X_v))
+            for stat, weight in DK_WEIGHTS.items():
                 m = HistGradientBoostingRegressor(**params)
-                m.fit(X_it, y_it)
-                rmse = np.sqrt(mean_squared_error(y_v, m.predict(X_v)))
+                m.fit(X_it, stat_targets[stat]["inner_train"])
+                pred_v += weight * m.predict(X_v)
+            rmse = np.sqrt(mean_squared_error(y_v, pred_v))
         except Exception:
             return float("inf")
 
@@ -535,24 +569,10 @@ def save_visuals(study, visuals_dir):
         fig.savefig(visuals_dir / "max_depth_vs_rmse.png", dpi=150)
         plt.close(fig)
 
-    # 6. Multi-output vs direct boxplot
-    if "params_use_multi_output" in trials_df.columns:
-        fig, ax = plt.subplots(figsize=(8, 5))
-        groups = trials_df.groupby("params_use_multi_output")["value"].apply(list)
-        labels = [f"Direct\n(n={len(groups.get(False, []))})", f"Multi-output\n(n={len(groups.get(True, []))})"]
-        data = [groups.get(False, []), groups.get(True, [])]
-        ax.boxplot(data, labels=labels)
-        ax.set_ylabel("Validation RMSE")
-        ax.set_title("Direct vs Multi-Output Decomposition")
-        ax.grid(True, alpha=0.3, axis="y")
-        fig.tight_layout()
-        fig.savefig(visuals_dir / "multi_output_comparison.png", dpi=150)
-        plt.close(fig)
-
-    # 7. Feature group usage in top 20 trials
+    # 6. Feature group usage in top 20 trials (optional groups only)
     top_20 = trials_df.nsmallest(20, "value")
     feat_usage = {}
-    for grp in ["context", "trends", "efficiency", "injury", "schedule", "position", "dvp"]:
+    for grp in OPTIONAL_GROUPS:
         col = f"params_use_{grp}"
         if col in top_20.columns:
             feat_usage[grp] = top_20[col].mean() * 100
@@ -680,49 +700,46 @@ def main():
     bp = best.params
 
     best_features = list(roll_cols)
-    for grp in ["context", "trends", "efficiency", "injury", "schedule", "position", "dvp"]:
-        if bp.get(f"use_{grp}", False) and feature_groups[grp]:
+    for grp in FORCED_GROUPS:
+        if feature_groups.get(grp):
+            best_features += feature_groups[grp]
+    for grp in OPTIONAL_GROUPS:
+        if bp.get(f"use_{grp}", False) and feature_groups.get(grp):
             best_features += feature_groups[grp]
     best_features = list(dict.fromkeys(best_features))
 
     best_model_params = dict(
-        loss=bp["loss"], learning_rate=bp["learning_rate"],
-        max_iter=bp["max_iter"], max_depth=bp["max_depth"],
+        loss="squared_error",
+        learning_rate=bp["learning_rate"],
+        max_iter=bp["max_iter"],
+        max_depth=bp["max_depth"],
         min_samples_leaf=bp["min_samples_leaf"],
         l2_regularization=bp["l2_regularization"],
         max_bins=bp["max_bins"],
         max_leaf_nodes=bp.get("max_leaf_nodes") if bp.get("use_max_leaf_nodes") else None,
-        early_stopping=bp["early_stopping"], random_state=42,
+        early_stopping=True,
+        n_iter_no_change=bp["n_iter_no_change"],
+        validation_fraction=bp["validation_fraction"],
+        random_state=42,
     )
-    if bp["early_stopping"]:
-        best_model_params["n_iter_no_change"] = bp["n_iter_no_change"]
-        best_model_params["validation_fraction"] = bp["validation_fraction"]
 
     X_train = df_clean.loc[is_train, best_features].values
     X_test  = df_clean.loc[is_test, best_features].values
     y_train = df_clean.loc[is_train, "FANTASY_PTS"].values
     y_test  = df_clean.loc[is_test, "FANTASY_PTS"].values
 
-    use_multi = bp["use_multi_output"]
-
-    if use_multi:
-        models = {}
-        pred_train = np.zeros(len(X_train))
-        pred_test  = np.zeros(len(X_test))
-        for stat, weight in DK_WEIGHTS.items():
-            m = HistGradientBoostingRegressor(**best_model_params)
-            m.fit(X_train, stat_targets[stat]["train"])
-            pred_train += weight * m.predict(X_train)
-            pred_test  += weight * m.predict(X_test)
-            models[stat] = m
-            rmse_te = np.sqrt(mean_squared_error(stat_targets[stat]["test"], m.predict(X_test)))
-            print(f"  {stat:5s} (w={weight:+.2f})  test RMSE={rmse_te:.3f}")
-    else:
+    use_multi = True
+    models = {}
+    pred_train = np.zeros(len(X_train))
+    pred_test  = np.zeros(len(X_test))
+    for stat, weight in DK_WEIGHTS.items():
         m = HistGradientBoostingRegressor(**best_model_params)
-        m.fit(X_train, y_train)
-        pred_train = m.predict(X_train)
-        pred_test  = m.predict(X_test)
-        models = {"direct": m}
+        m.fit(X_train, stat_targets[stat]["train"])
+        pred_train += weight * m.predict(X_train)
+        pred_test  += weight * m.predict(X_test)
+        models[stat] = m
+        rmse_te = np.sqrt(mean_squared_error(stat_targets[stat]["test"], m.predict(X_test)))
+        print(f"  {stat:5s} (w={weight:+.2f})  test RMSE={rmse_te:.3f}")
 
     train_rmse = np.sqrt(mean_squared_error(y_train, pred_train))
     test_rmse  = np.sqrt(mean_squared_error(y_test, pred_test))
