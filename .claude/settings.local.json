@@ -6,7 +6,9 @@
       "Bash(\"C:\\Users\\falkt\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" collect_data.py --update)",
       "Bash(\"C:\\Users\\falkt\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" collect_all.py)",
       "Bash(\"C:\\Users\\falkt\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" add_matchup_history.py)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python3:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
